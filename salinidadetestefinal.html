@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Monitoramento de Salinidade</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f8ff;
+      color: #333;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+
+    h1, h2 {
+      text-align: center;
+      color: #005580;
+    }
+
+    #valor {
+      font-size: 2.5em;
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    #alerta {
+      text-align: center;
+      font-size: 1.2em;
+      font-weight: bold;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 15px 0;
+      display: none;
+    }
+
+    iframe {
+      display: block;
+      width: 100%;
+      height: 300px;
+      margin: 20px 0;
+      border: none;
+      border-radius: 8px;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.9em;
+      margin-top: 40px;
+      color: #888;
+    }
+
+    #refreshButton, #pesquisarButton {
+      display: block;
+      margin: 10px auto;
+      padding: 10px 20px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+
+    .pesquisa-container {
+      text-align: center;
+      margin: 10px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Monitoramento de Salinidade</h1>
+    <p id="valor">Carregando TDS...</p>
+    <div id="alerta"></div>
+
+    <!-- Gráfico ThingSpeak com número de amostras ajustável -->
+    <iframe 
+      id="chartFrame"
+      width="100%" 
+      height="300" 
+      src="https://thingspeak.com/channels/3105561/charts/1?bgcolor=%23ffffff&color=%23ff0000&dynamic=true&results=20&type=line&title=Salinidade"
+      allowfullscreen>
+    </iframe>
+    <button id="refreshButton" onclick="refreshChart()">Atualizar Gráfico</button>
+
+    <h2>Pesquisar Medições por Dia</h2>
+    <div class="pesquisa-container">
+      <input type="date" id="dataPesquisa">
+      <button id="pesquisarButton" onclick="pesquisarDia()">Pesquisar</button>
+    </div>
+    <div id="resultados"></div>
+
+    <footer>
+      Dados coletados via ESP32 + Sensor TDS | Powered by ThingSpeak
+    </footer>
+  </div>
+
+  <script>
+    const channelID = "3105561";
+    const field = "1";
+    const apiKey = "SBHYZDE761N2TXJ0";
+
+    const url = `https://api.thingspeak.com/channels/${channelID}/fields/${field}.json?api_key=${apiKey}&results=1`;
+
+    function atualizarLeitura() {
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          const leitura = parseFloat(data.feeds[0].field1);
+          const valorElemento = document.getElementById("valor");
+          const alertaElemento = document.getElementById("alerta");
+
+          valorElemento.innerText = `${leitura.toFixed(2)} ppm`;
+
+          if (leitura < 50 || leitura > 100) {
+            alertaElemento.style.display = "block";
+            alertaElemento.style.backgroundColor = "#ffcccc";
+            alertaElemento.style.color = "#cc0000";
+            alertaElemento.innerText = "Alerta: valor de salinidade fora da faixa ideal (50 - 100 ppm)";
+          } else {
+            alertaElemento.style.display = "block";
+            alertaElemento.style.backgroundColor = "#ccffcc";
+            alertaElemento.style.color = "#006600";
+            alertaElemento.innerText = "Salinidade dentro da faixa ideal.";
+          }
+        })
+        .catch(error => {
+          console.error("Erro ao buscar dados:", error);
+          document.getElementById("valor").innerText = "Erro ao carregar TDS.";
+        });
+    }
+
+    function refreshChart() {
+      const chartFrame = document.getElementById("chartFrame");
+      chartFrame.src = chartFrame.src; // Força recarregamento do iframe
+    }
+
+    function formatarDataHora(isoString) {
+      const data = new Date(isoString);
+      const dia = String(data.getUTCDate()).padStart(2, '0');
+      const mes = String(data.getUTCMonth() + 1).padStart(2, '0');
+      const ano = data.getUTCFullYear();
+      const hora = String(data.getUTCHours()).padStart(2, '0');
+      const minuto = String(data.getUTCMinutes()).padStart(2, '0');
+      const segundo = String(data.getUTCSeconds()).padStart(2, '0');
+      return `${dia}/${mes}/${ano} ${hora}:${minuto}:${segundo} UTC`;
+    }
+
+    function pesquisarDia() {
+      const data = document.getElementById("dataPesquisa").value;
+      if (!data) {
+        alert("Selecione uma data válida.");
+        return;
+      }
+
+      const start = `${data} 00:00:00`;
+      const end = `${data} 23:59:59`;
+      const urlDia = `https://api.thingspeak.com/channels/${channelID}/fields/${field}.json?api_key=${apiKey}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&results=8000`;
+
+      fetch(urlDia)
+        .then(response => response.json())
+        .then(data => {
+          const feeds = data.feeds;
+          const resultadosElemento = document.getElementById("resultados");
+
+          if (feeds.length === 0) {
+            resultadosElemento.innerHTML = "<p>Nenhuma medição encontrada para este dia.</p>";
+            return;
+          }
+
+          let html = "<table><tr><th>Data/Hora</th><th>TDS (ppm)</th></tr>";
+          feeds.forEach(feed => {
+            const dt = feed.created_at;
+            const tds = parseFloat(feed.field1);
+            const dataFormatada = formatarDataHora(dt);
+            html += `<tr><td>${dataFormatada}</td><td>${tds.toFixed(2)}</td></tr>`;
+          });
+          html += "</table>";
+          resultadosElemento.innerHTML = html;
+        })
+        .catch(error => {
+          console.error("Erro ao buscar dados do dia:", error);
+          document.getElementById("resultados").innerHTML = "<p>Erro ao carregar medições do dia.</p>";
+        });
+    }
+
+    atualizarLeitura();
+    setInterval(atualizarLeitura, 20000); // Atualiza a cada 20 segundos
+  </script>
+</body>
+</html>
