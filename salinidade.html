@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Monitoramento de Salinidade</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f8ff;
+      color: #333;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      text-align: center;
+      color: #005580;
+    }
+
+    #valor {
+      font-size: 2.5em;
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    #ec {
+      font-size: 1.8em;
+      text-align: center;
+      margin: 10px 0;
+      color: #444;
+    }
+
+    #alerta {
+      text-align: center;
+      font-size: 1.2em;
+      font-weight: bold;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 15px 0;
+      display: none;
+    }
+
+    iframe {
+      display: block;
+      margin: 30px auto;
+      border: none;
+      border-radius: 8px;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.9em;
+      margin-top: 40px;
+      color: #888;
+    }
+
+    #refreshButton {
+      display: block;
+      margin: 10px auto;
+      padding: 10px 20px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Monitoramento de Salinidade</h1>
+    <p id="valor">Carregando TDS...</p>
+    <p id="ec">Carregando EC...</p>
+    <div id="alerta"></div>
+
+    <!-- Gráfico ThingSpeak com número de amostras ajustável -->
+    <iframe 
+      id="chartFrame"
+      width="100%" 
+      height="300" 
+      src="https://thingspeak.com/channels/3105561/charts/1?bgcolor=%23ffffff&color=%23ff0000&dynamic=true&results=20&type=line&title=Salinidade"
+      allowfullscreen>
+    </iframe>
+    <button id="refreshButton" onclick="refreshChart()">Atualizar Gráfico</button>
+
+    <footer>
+      Dados coletados via ESP32 + Sensor TDS | Powered by ThingSpeak
+    </footer>
+  </div>
+
+  <script>
+    const channelID = "3105561";
+    const field = "1";
+    const apiKey = "SBHYZDE761N2TXJ0";
+
+    const url = `https://api.thingspeak.com/channels/${channelID}/fields/${field}.json?api_key=${apiKey}&results=1`;
+
+    function atualizarLeitura() {
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          const leitura = parseFloat(data.feeds[0].field1);
+          const valorElemento = document.getElementById("valor");
+          const ecElemento = document.getElementById("ec");
+          const alertaElemento = document.getElementById("alerta");
+
+          valorElemento.innerText = `${leitura.toFixed(2)} ppm`;
+          const ec = (leitura * 2) / 1000.0;
+          ecElemento.innerText = `EC: ${ec.toFixed(2)} mS/cm`;
+
+          if (leitura < 50 || leitura > 100) {
+            alertaElemento.style.display = "block";
+            alertaElemento.style.backgroundColor = "#ffcccc";
+            alertaElemento.style.color = "#cc0000";
+            alertaElemento.innerText = "⚠️ Alerta: valor de salinidade fora da faixa ideal (50 - 100 ppm)";
+          } else {
+            alertaElemento.style.display = "block";
+            alertaElemento.style.backgroundColor = "#ccffcc";
+            alertaElemento.style.color = "#006600";
+            alertaElemento.innerText = "✅ Salinidade dentro da faixa ideal.";
+          }
+        })
+        .catch(error => {
+          console.error("Erro ao buscar dados:", error);
+          document.getElementById("valor").innerText = "Erro ao carregar TDS.";
+          document.getElementById("ec").innerText = "Erro ao carregar EC.";
+        });
+    }
+
+    function refreshChart() {
+      const chartFrame = document.getElementById("chartFrame");
+      chartFrame.src = chartFrame.src; // Força recarregamento do iframe
+    }
+
+    atualizarLeitura();
+    setInterval(atualizarLeitura, 20000); // Atualiza a cada 20 segundos
+  </script>
+</body>
+</html>
